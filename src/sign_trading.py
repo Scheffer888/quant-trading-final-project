@@ -464,7 +464,7 @@ def single_param_sensitivity(
             run_params[param_name] = val
 
             # Create a custom model name suffix so we don't overwrite results
-            model_name = f"./_output/models/{base_model_name}_{param_name}={val}"
+            model_name = f"{base_model_name}_{param_name}={val}"
 
             print(f"\n=== Varying '{param_name}' => {val} ===")
 
@@ -508,78 +508,98 @@ def single_param_sensitivity(
 
 # Example usage:
 if __name__ == "__main__":
-    # Set use_file=True to load data from a CSV file (no WRDS authentication needed).
-    # Adjust parameters below as desired for testing.
-    run_intraday_hft_pipeline_with_plots(
-        ticker="SPY",
-        trade_date="2024-03-07",
-        use_file=True,
-        file_path="./data/processed/merged_trades.csv",
-        buy_threshold_std=1.0,
-        sell_threshold_std=1.0,
-        transaction_cost=0.0001,
-        half_life_s=60,
-        spread_window="60s",
-        flow_time_step="100ms",
-        flow_window="5s",
-        bucket_size=1000,
-        vpin_buckets=30,
-        vwap_past_window="60s",
-        vwap_future_window="20s",
-        use_pca=False,
-        pca_components=0.9,
-        train_size=0.8,
-        lookahead_timedelta="100ms",
-        up_weight=1.0,
-        down_weight=1.0
-    )
 
+    # Define the base parameters
     base_params = {
         "buy_threshold_std": 1.0,
         "sell_threshold_std": 1.0,
         "transaction_cost": 0.0001,
         "half_life_s": 60,
-        "spread_window": "60s",
-        "flow_time_step": "100ms",
-        "flow_window": "5s",
-        "bucket_size": 1000,
-        "vpin_buckets": 30,
-        "vwap_past_window": "60s",
-        "vwap_future_window": "20s",
         "use_pca": False,
-        "pca_components": 0.9,
         "train_size": 0.8,
-        "lookahead_timedelta": "100ms",
-        "up_weight": 1.0,
-        "down_weight": 1.0
+        "lookahead_timedelta": pd.Timedelta("1ms")
     }
 
-    # Define the ranges we want to test for certain parameters
-    param_values_dict = {
-        # Try multiple half_life_s values
-        "half_life_s": [30, 60, 90],
-        # Try different spread windows
-        "spread_window": ["30s", "60s", "90s"],
-        # Could also vary transaction costs, lookahead, thresholds, etc.
-        # "transaction_cost": [0.00005, 0.0001, 0.0002],
-    }
+    trade_date = "2024-03-07"
+    ticker = 'SPY'
 
-    # Run the single-parameter sensitivity tests
-    results_df = single_param_sensitivity(
-        ticker="SPY",
-        trade_date="2024-03-07",
+    # Output directory
+    #output_dir = "./data/results/param_sensitivity"
+
+    # Sensitivity to Trading Costs
+    param_values_transaction_cost = {"transaction_cost": [0, 0.00005, 0.0001, 0.0005, 0.001]}
+    results_tc = single_param_sensitivity(
+        ticker='SPY',
+        trade_date='2024-03-07',
         use_file=True,
         file_path="./data/processed/merged_trades.csv",
         base_params=base_params,
-        param_values_dict=param_values_dict,
-        output_dir="data/results/param_sensitivity",
-        base_model_name="random_forest_hft_signal"
+        param_values_dict=param_values_transaction_cost,
+        base_model_name='sensitivity_transaction_cost'
     )
+    results_tc.plot(x='transaction_cost', y='final_return', marker='o',
+                    title="Sensitivity to Trading Costs", xlabel="Transaction Costs", ylabel="Final Returns")
 
-    print("\n======== Final Sensitivity Results ========\n")
-    print(results_df)
+    # Sensitivity to Lookahead Timedelta
+    param_values_lookahead = {
+        "lookahead_timedelta": [pd.Timedelta("1ms"), pd.Timedelta("10ms"), pd.Timedelta("50ms"), pd.Timedelta("100ms"), pd.Timedelta("500ms")]
+    }
+    results_lookahead = single_param_sensitivity(
+        ticker='SPY',
+        trade_date='2024-03-07',
+        use_file=True,
+        file_path="./data/processed/merged_trades.csv",
+        base_params=base_params,
+        param_values_dict=param_values_lookahead,
+        base_model_name='sensitivity_lookahead'
+    )
+    results_lookahead.plot(x='lookahead_timedelta', y='final_return', marker='o', title="Sensitivity to Lookahead Timedelta", xlabel="Lookahead Timedelta", ylabel="Final Return")
 
-    # Optionally save the results to a CSV
-    out_csv = Path("data/results/param_sensitivity/all_sensitivity_results.csv")
-    results_df.to_csv(out_csv, index=False)
-    print(f"Saved CSV: {out_csv.resolve()}")
+    # Sensitivity to Training Size
+    param_values_train_size = {
+        "train_size": [0.6, 0.7, 0.8, 0.9]
+    }
+    results_train_size = single_param_sensitivity(
+        ticker='SPY',
+        trade_date='2024-03-07',
+        use_file=True,
+        file_path="./data/processed/merged_trades.csv",
+        base_params=base_params,
+        param_values_dict=param_values_train_size,
+        base_model_name='sensitivity_train_size'
+    )
+    results_train_size.plot(x='train_size', y='final_return', marker='o', title="Sensitivity to Training Size", xlabel="Training Size", ylabel="Final Return")
+
+    # Sensitivity to Buy and Sell Thresholds
+    param_values_thresholds = {
+        "buy_threshold_std": [0.5, 1.0, 1.5, 2.0],
+        "sell_threshold_std": [0.5, 1.0, 1.5, 2.0]
+    }
+    results_thresholds = single_param_sensitivity(
+        ticker='SPY',
+        trade_date='2024-03-07',
+        use_file=True,
+        file_path="./data/processed/merged_trades.csv",
+        base_params=base_params,
+        param_values_dict=param_values_thresholds,
+        base_model_name='sensitivity_thresholds'
+    )
+    results_thresholds.groupby("parameter").plot(x='parameter', y='final_return', marker='o', title="Sensitivity to Buy/Sell Thresholds", xlabel="Threshold (std dev)", ylabel="Final Return")
+
+    # Sensitivity to PCA usage
+    param_values_pca = {
+        "use_pca": [False, True]
+    }
+    results_pca = single_param_sensitivity(
+        ticker='SPY',
+        trade_date='2024-03-07',
+        use_file=True,
+        file_path="./data/processed/merged_trades.csv",
+        base_params=base_params,
+        param_values_dict=param_values_pca,
+        base_model_name='sensitivity_pca'
+    )
+    results_pca.plot(x='use_pca', y='final_return', kind='bar', title="Sensitivity to PCA Usage", xlabel="PCA Usage", ylabel="Final Return", rot=0)
+
+    # Display plots
+    plt.show()
